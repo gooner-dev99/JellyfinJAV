@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <AssemblyVersion>2026.02.16.1</AssemblyVersion>
-    <FileVersion>2026.02.16.1</FileVersion>
+    <AssemblyVersion>2026.02.16.3</AssemblyVersion>
+    <FileVersion>2026.02.16.3</FileVersion>
     <NoWarn>SA1633</NoWarn>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <Nullable>enable</Nullable>

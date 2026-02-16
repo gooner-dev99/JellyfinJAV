@@ -104,12 +104,18 @@ jobs:
       - name: Package plugin
         run: python3 package.py
 
+      - name: Generate checksum file
+        run: |
+          cd release
+          sha256sum "jellyfinjav_${{ steps.version.outputs.version }}.zip" > "jellyfinjav_${{ steps.version.outputs.version }}.zip.sha256"
+
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
         with:
           name: jellyfinjav_${{ steps.version.outputs.version }}
           path: |
             release/jellyfinjav_${{ steps.version.outputs.version }}.zip
+            release/jellyfinjav_${{ steps.version.outputs.version }}.zip.sha256
             manifest.json
 
   release:
@@ -135,5 +141,6 @@ jobs:
           name: ${{ needs.package.outputs.release_tag }}
           files: |
             release-assets/jellyfinjav_${{ needs.package.outputs.version }}.zip
+            release-assets/jellyfinjav_${{ needs.package.outputs.version }}.zip.sha256
             release-assets/manifest.json
           generate_release_notes: true
