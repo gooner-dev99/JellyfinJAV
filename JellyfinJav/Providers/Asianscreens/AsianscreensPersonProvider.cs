@@ -30,16 +30,25 @@ namespace JellyfinJav.Providers.AsianscreensProvider
         /// <inheritdoc />
         public async Task<IEnumerable<RemoteSearchResult>> GetSearchResults(PersonLookupInfo info, CancellationToken cancelationToken)
         {
-            return from actress in await Client.Search(info.Name).ConfigureAwait(false)
-                   select new RemoteSearchResult
-                   {
-                       Name = actress.Name,
-                       ProviderIds = new Dictionary<string, string>
-                       {
-                           { "Asianscreens", actress.Id },
-                       },
-                       ImageUrl = actress.Cover?.ToString(),
-                   };
+            if (string.IsNullOrWhiteSpace(info.Name))
+            {
+                return Enumerable.Empty<RemoteSearchResult>();
+            }
+
+            var actresses = await Client.Search(info.Name).ConfigureAwait(false);
+
+            return actresses
+                .Where(actress => !string.IsNullOrWhiteSpace(actress.Id))
+                .Select(actress => new RemoteSearchResult
+                {
+                    Name = string.IsNullOrWhiteSpace(actress.Name) ? actress.Id : actress.Name,
+                    ProviderIds = new Dictionary<string, string>
+                    {
+                        { "Asianscreens", actress.Id },
+                    },
+                    ImageUrl = actress.Cover?.ToString(),
+                })
+                .ToList();
         }
 
         /// <inheritdoc />
@@ -68,6 +77,9 @@ namespace JellyfinJav.Providers.AsianscreensProvider
                 // their videos will be a challenge.
                 Item = new Person
                 {
+                    Name = string.IsNullOrWhiteSpace(actress.Value.Name)
+                        ? (string.IsNullOrWhiteSpace(info.Name) ? actress.Value.Id : info.Name)
+                        : actress.Value.Name,
                     ProviderIds = new Dictionary<string, string> { { "Asianscreens", actress.Value.Id } },
                     PremiereDate = actress.Value.Birthdate,
                     ProductionLocations = new[] { actress.Value.Birthplace }.Where(i => i is string).ToArray(),

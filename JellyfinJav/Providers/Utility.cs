@@ -42,8 +42,19 @@ namespace JellyfinJav.Providers
         /// <returns>The video's jav code.</returns>
         public static string? ExtractCodeFromFilename(string filename)
         {
-            var rx = new Regex(@"([A-Za-z]+)-(\d+)", RegexOptions.Compiled);
-            var match = rx.Match(filename);
+            if (string.IsNullOrWhiteSpace(filename))
+            {
+                return null;
+            }
+
+            var normalizedName = Path.GetFileNameWithoutExtension(filename);
+            if (string.IsNullOrWhiteSpace(normalizedName))
+            {
+                normalizedName = filename;
+            }
+
+            var rx = new Regex(@"\b([A-Za-z]{2,10})[-_\s]?(\d{2,6})\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+            var match = rx.Match(normalizedName);
             if (match.Success)
             {
                 string letters = match.Groups[1].Value;
@@ -55,7 +66,7 @@ namespace JellyfinJav.Providers
                 return $"{letters}-{digits}"; // Include hyphen between letters and digits
             }
 
-            return filename;
+            return null;
         }
 
         /// <summary>Creates a video's display name according to the plugin's selected configuration.</summary>

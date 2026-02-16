@@ -1,20 +1,11 @@
 namespace JellyfinJav.Api
 {
-    using AngleSharp;
-    using AngleSharp.Dom;
-    using AngleSharp.Html.Dom;
-    using AngleSharp.Io;
-    using MediaBrowser.Controller.Entities;
-    using MediaBrowser.Controller.Entities.Movies;
-    using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using System;
     using System.Collections.Generic;
-    using System.Globalization;
     using System.Linq;
+    using System.Net;
     using System.Net.Http;
-    using System.Reflection.Metadata;
-    using System.Text.Json;
     using System.Text.RegularExpressions;
     using System.Threading.Tasks;
 
@@ -60,45 +51,51 @@ namespace JellyfinJav.Api
         };
 
         private static readonly HttpClient HttpClient = new HttpClient();
-        private static readonly IBrowsingContext Context = BrowsingContext.New();
 
         /// <summary>Searches for a video by jav code.</summary>
         /// <param name="searchCode">The jav code. Ex: ABP-001.</param>
         /// <returns>A list of every matched video.</returns>
         public static async Task<IEnumerable<VideoResult>> Search(string searchCode)
         {
+            var (results, _) = await SearchWithStatus(searchCode).ConfigureAwait(false);
+            return results;
+        }
+
+        /// <summary>Searches for a video by jav code and returns the HTTP status code.</summary>
+        /// <param name="searchCode">The jav code. Ex: ABP-001.</param>
+        /// <returns>The matched videos and HTTP status code.</returns>
+        public static async Task<(IEnumerable<VideoResult> Results, HttpStatusCode StatusCode)> SearchWithStatus(string searchCode)
+        {
             var videos = new List<VideoResult>();
-            var client = new HttpClient();
-            var context = new BrowsingContext();
+            var finalStatus = HttpStatusCode.NotFound;
 
-            client.DefaultRequestHeaders.Host = "r18.dev";
-            client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/xhtml+xml"));
-            client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
-            client.DefaultRequestHeaders.AcceptLanguage.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("en-US"));
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0");
-
-            var response = await client.GetAsync($"https://r18.dev/videos/vod/movies/detail/-/dvd_id={searchCode}/json");
-
-            if (response.IsSuccessStatusCode)
+            foreach (var candidate in BuildCombinedCandidates(searchCode))
             {
-                var jsonContent = await response.Content.ReadAsStringAsync();
-                var jsonObject = JObject.Parse(jsonContent);
-                var contentId = jsonObject["content_id"].ToString();
-                var large2Url = jsonObject["images"]["jacket_image"]["large2"].ToString();
+                var (video, statusCode) = await LoadVideoWithStatus(candidate).ConfigureAwait(false);
+                finalStatus = statusCode;
+
+                if (!video.HasValue)
+                {
+                    continue;
+                }
+
+                Uri? coverUri = null;
+                if (!string.IsNullOrWhiteSpace(video.Value.Cover) && Uri.TryCreate(video.Value.Cover, UriKind.Absolute, out var parsedCoverUri))
+                {
+                    coverUri = parsedCoverUri;
+                }
+
                 videos.Add(new VideoResult
                 {
-                    Code = searchCode.ToUpper(),
-                    Id = contentId,
-                    Cover = new Uri(large2Url),
+                    Code = string.IsNullOrWhiteSpace(video.Value.Code) ? searchCode.ToUpperInvariant() : video.Value.Code,
+                    Id = video.Value.Id,
+                    Cover = coverUri,
                 });
 
-                return videos;
+                break;
             }
-            else
-            {
-                // Return empty list if request fails
-                return videos;
-            }
+
+            return (videos, finalStatus);
         }
 
         /// <summary>Searches for a video by jav code, and returns the first result.</summary>
@@ -106,15 +103,24 @@ namespace JellyfinJav.Api
         /// <returns>The parsed video.</returns>
         public static async Task<Video?> SearchFirst(string searchCode)
         {
-            var results = await Search(searchCode);
+            var (video, _) = await SearchFirstWithStatus(searchCode).ConfigureAwait(false);
+            return video;
+        }
+
+        /// <summary>Searches for a video by jav code and returns the first result with HTTP status code.</summary>
+        /// <param name="searchCode">The jav code. Ex: ABP-001.</param>
+        /// <returns>The parsed video and HTTP status code.</returns>
+        public static async Task<(Video? Video, HttpStatusCode StatusCode)> SearchFirstWithStatus(string searchCode)
+        {
+            var (results, searchStatusCode) = await SearchWithStatus(searchCode).ConfigureAwait(false);
 
             if (results.Any())
             {
-                return await LoadVideo(results.FirstOrDefault().Id);
+                return await LoadVideoWithStatus(results.FirstOrDefault().Id).ConfigureAwait(false);
             }
             else
             {
-                return null;
+                return (null, searchStatusCode);
             }
         }
 
@@ -123,48 +129,68 @@ namespace JellyfinJav.Api
         /// <returns>The parsed video.</returns>
         public static async Task<Video?> LoadVideo(string id)
         {
-            var client = new HttpClient();
-            var context = new BrowsingContext();
+            var (video, _) = await LoadVideoWithStatus(id).ConfigureAwait(false);
+            return video;
+        }
 
-            client.DefaultRequestHeaders.Host = "r18.dev";
-            client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/xhtml+xml"));
-            client.DefaultRequestHeaders.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
-            client.DefaultRequestHeaders.AcceptLanguage.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("en-US"));
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0");
+        /// <summary>Loads a video by id and returns the HTTP status code.</summary>
+        /// <param name="id">The r18.dev unique video identifier.</param>
+        /// <returns>The parsed video and HTTP status code.</returns>
+        public static async Task<(Video? Video, HttpStatusCode StatusCode)> LoadVideoWithStatus(string id)
+        {
+            var finalStatus = HttpStatusCode.NotFound;
 
-            var response = await client.GetAsync($"https://r18.dev/videos/vod/movies/detail/-/combined={id}/json");
-            if (!response.IsSuccessStatusCode)
+            foreach (var candidate in BuildCombinedCandidates(id))
             {
-                return null;
-            }
-            
-            var jsonContent = await response.Content.ReadAsStringAsync();
-            var json = JObject.Parse(jsonContent);
+                var request = CreateJsonRequest($"https://r18.dev/videos/vod/movies/detail/-/combined={candidate}/json");
+                using var response = await HttpClient.SendAsync(request).ConfigureAwait(false);
+                finalStatus = response.StatusCode;
 
+                if (!response.IsSuccessStatusCode)
+                {
+                    continue;
+                }
 
-            string? code = json["dvd_id"]?.ToString() ?? "N/A";
-            string? title = json["title_en"]?.ToString() ?? "N/A";
-            var actresses = json["actresses"] != null
-                ? json["actresses"].Select(c => c["name_romaji"].ToString())
-                : new List<string>();
-            var genres = json["categories"] != null
-                ? json["categories"].Select(c => c["name_en"].ToString())
-                : new List<string>();
-            string? studio = json["label_name_en"].ToString();
-            string? cover = json["jacket_full_url"].ToString();
-            string? boxArt = cover?.Replace("pl.jpg", "ps.jpg");
-            string dateString = json["release_date"]?.ToString();
-            DateTime releaseDate = DateTime.ParseExact(dateString, "yyyy-MM-dd", null);
+                var jsonContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var json = JObject.Parse(jsonContent);
 
-            if (title is null || code is null)
-            {
-                return null;
-            }
+                var code = json["dvd_id"]?.ToString();
+                var title = json["title_en"]?.ToString() ?? json["title"]?.ToString();
 
-            title = NormalizeTitle(title, actresses);
+                if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(title))
+                {
+                    return (null, finalStatus);
+                }
 
-            return new Video(
-                    id: id,
+                var actresses = json["actresses"] != null
+                    ? json["actresses"]
+                        .Select(c => c?["name_romaji"]?.ToString())
+                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Select(n => n!)
+                    : Enumerable.Empty<string>();
+
+                var genres = json["categories"] != null
+                    ? json["categories"]
+                        .Select(c => c?["name_en"]?.ToString())
+                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Select(n => n!)
+                    : Enumerable.Empty<string>();
+
+                var studio = json["label_name_en"]?.ToString();
+                var cover = json["jacket_full_url"]?.ToString();
+                var boxArt = string.IsNullOrWhiteSpace(cover) ? null : cover.Replace("pl.jpg", "ps.jpg");
+                DateTime? releaseDate = null;
+
+                var dateString = json["release_date"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(dateString) && DateTime.TryParseExact(dateString, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var parsedReleaseDate))
+                {
+                    releaseDate = parsedReleaseDate;
+                }
+
+                title = NormalizeTitle(title, actresses);
+
+                return (new Video(
+                    id: json["content_id"]?.ToString() ?? candidate,
                     code: code,
                     title: title,
                     actresses: actresses,
@@ -172,7 +198,49 @@ namespace JellyfinJav.Api
                     studio: studio,
                     boxArt: boxArt,
                     cover: cover,
-                    releaseDate: releaseDate);
+                    releaseDate: releaseDate), finalStatus);
+            }
+
+            return (null, finalStatus);
+        }
+
+        private static HttpRequestMessage CreateJsonRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
+            request.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
+            request.Headers.TryAddWithoutValidation("Referer", "https://r18.dev/");
+            request.Headers.TryAddWithoutValidation("Origin", "https://r18.dev");
+            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36");
+            return request;
+        }
+
+        private static IEnumerable<string> BuildCombinedCandidates(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                yield break;
+            }
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var trimmed = value.Trim();
+            if (seen.Add(trimmed))
+            {
+                yield return trimmed;
+            }
+
+            var lower = trimmed.ToLowerInvariant();
+            if (seen.Add(lower))
+            {
+                yield return lower;
+            }
+
+            var alnumOnly = Regex.Replace(lower, "[^a-z0-9]", string.Empty);
+            if (seen.Add(alnumOnly))
+            {
+                yield return alnumOnly;
+            }
         }
 
         private static string NormalizeActress(string actress)

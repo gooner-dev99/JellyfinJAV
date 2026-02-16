@@ -6,3 +6,6 @@ obj/
 
 videos/
 release/
+
+cache/
+config/

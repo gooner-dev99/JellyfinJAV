@@ -53,8 +53,11 @@ namespace JellyfinJav.Providers.R18Provider
             Api.Video? video;
             if (info.ProviderIds.ContainsKey("R18"))
             {
-                video = await R18Client.LoadVideo(info.ProviderIds["R18"]).ConfigureAwait(false);
-                this.logger.LogInformation("[JellyfinJav] R18 - Scanning Video: " + video);
+                var r18Id = info.ProviderIds["R18"];
+                this.logger.LogInformation("[JellyfinJav] R18 - Metadata lookup by provider id: " + r18Id);
+                var (videoById, metadataStatusCodeById) = await R18Client.LoadVideoWithStatus(r18Id).ConfigureAwait(false);
+                video = videoById;
+                this.logger.LogInformation("[JellyfinJav] R18 - Metadata lookup response for provider id {R18Id}: HTTP {StatusCode} ({StatusName}), has value: {HasValue}", r18Id, (int)metadataStatusCodeById, metadataStatusCodeById, video.HasValue);
             }
             else
             {
@@ -65,13 +68,14 @@ namespace JellyfinJav.Providers.R18Provider
                     return new MetadataResult<Movie>();
                 }
 
-                video = await R18Client.SearchFirst(code).ConfigureAwait(false);
-                this.logger.LogInformation("[JellyfinJav] R18 - Searching r18.dev: " + video);
+                var (videoBySearch, metadataStatusCodeBySearch) = await R18Client.SearchFirstWithStatus(code).ConfigureAwait(false);
+                video = videoBySearch;
+                this.logger.LogInformation("[JellyfinJav] R18 - SearchFirst response for code {Code}: HTTP {StatusCode} ({StatusName}), has value: {HasValue}", code, (int)metadataStatusCodeBySearch, metadataStatusCodeBySearch, video.HasValue);
             }
 
             if (!video.HasValue)
             {
-                this.logger.LogInformation("[JellyfinJav] R18 - Oh Noes!" + video);
+                this.logger.LogInformation("[JellyfinJav] R18 - Metadata lookup returned null result.");
                 return new MetadataResult<Movie>();
             }
 
@@ -96,15 +100,49 @@ namespace JellyfinJav.Providers.R18Provider
         /// <inheritdoc />
         public async Task<IEnumerable<RemoteSearchResult>> GetSearchResults(MovieInfo info, CancellationToken cancelToken)
         {
+            if (info.ProviderIds.TryGetValue("R18", out var providerId) && !string.IsNullOrWhiteSpace(providerId))
+            {
+                this.logger.LogInformation("[JellyfinJav] R18 - Identify search using provider id: {R18Id}", providerId);
+                var (videoById, identifyStatusCodeById) = await R18Client.LoadVideoWithStatus(providerId).ConfigureAwait(false);
+                this.logger.LogInformation("[JellyfinJav] R18 - Identify search response for provider id {R18Id}: HTTP {StatusCode} ({StatusName}), has value: {HasValue}", providerId, (int)identifyStatusCodeById, identifyStatusCodeById, videoById.HasValue);
+                if (!videoById.HasValue)
+                {
+                    this.logger.LogInformation("[JellyfinJav] R18 - Identify search result is null for provider id: {R18Id}", providerId);
+                    return Array.Empty<RemoteSearchResult>();
+                }
+
+                this.logger.LogInformation("[JellyfinJav] R18 - Identify search found result for provider id: {R18Id}", providerId);
+                return new[]
+                {
+                    new RemoteSearchResult
+                    {
+                        Name = !string.IsNullOrWhiteSpace(videoById.Value.Code) ? videoById.Value.Code : providerId,
+                        ProviderIds = new Dictionary<string, string>
+                        {
+                            { "R18", videoById.Value.Id },
+                        },
+                        ImageUrl = videoById.Value.Cover,
+                    },
+                };
+            }
+
+            if (string.IsNullOrWhiteSpace(info.Name))
+            {
+                this.logger.LogInformation("[JellyfinJav] R18 - Search skipped: info.Name is null/empty and no provider id was supplied.");
+                return Array.Empty<RemoteSearchResult>();
+            }
+
             var javCode = Utility.ExtractCodeFromFilename(info.Name);
             if (string.IsNullOrEmpty(javCode))
             {
+                this.logger.LogInformation("[JellyfinJav] R18 - Search skipped: unable to extract code from name '{Name}'.", info.Name);
                 return Array.Empty<RemoteSearchResult>();
             }
 
             this.logger.LogInformation("[JellyfinJav] R18 - Getting Code: " + javCode);
 
-            var searchResults = await R18Client.Search(javCode);
+            var (searchResults, searchStatusCode) = await R18Client.SearchWithStatus(javCode).ConfigureAwait(false);
+            this.logger.LogInformation("[JellyfinJav] R18 - Search response for code {Code}: HTTP {StatusCode} ({StatusName})", javCode, (int)searchStatusCode, searchStatusCode);
 
             if (searchResults == null || !searchResults.Any())
             {
@@ -112,15 +150,29 @@ namespace JellyfinJav.Providers.R18Provider
                 return Array.Empty<RemoteSearchResult>(); // Return an empty collection, not null
             }
 
-            return searchResults.Select(video => new RemoteSearchResult
+            var mapped = searchResults
+                .Where(video => !string.IsNullOrWhiteSpace(video.Id))
+                .Select(video => new RemoteSearchResult
+                {
+                    Name = !string.IsNullOrWhiteSpace(video.Code) ? video.Code : video.Id,
+                    ProviderIds = new Dictionary<string, string>
+                    {
+                        { "R18", video.Id },
+                    },
+                    ImageUrl = video.Cover?.ToString(),
+                })
+                .ToList();
+
+            if (!mapped.Any())
             {
-                Name = video.Code,
-                ProviderIds = new Dictionary<string, string>
-        {
-            { "R18", video.Id },
-        },
-                ImageUrl = video.Cover?.ToString(),
-            }).ToList();  // Convert to a List to avoid potential issues
+                this.logger.LogInformation("[JellyfinJav] R18 - Search returned entries but all were filtered out due to missing ids for code: {Code}", javCode);
+            }
+            else
+            {
+                this.logger.LogInformation("[JellyfinJav] R18 - Returning {Count} search result(s) for code: {Code}", mapped.Count, javCode);
+            }
+
+            return mapped;
         }
 
         /// <inheritdoc />
@@ -151,6 +203,11 @@ namespace JellyfinJav.Providers.R18Provider
 
             foreach (var actress in video.Actresses)
             {
+                if (string.IsNullOrWhiteSpace(actress))
+                {
+                    continue;
+                }
+
                 var person = new PersonInfo
                 {
                     Name = NormalizeActressName(actress),

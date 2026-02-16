@@ -23,7 +23,7 @@ namespace JellyfinJav
         public static Plugin? Instance { get; private set; }
 
         /// <inheritdoc />
-        public override string Name => "Jellfin JAV";
+        public override string Name => "Jellyfin JAV";
 
         /// <inheritdoc />
         public override Guid Id => Guid.Parse("1d5fffc2-1028-4553-9660-bd4966899e44");

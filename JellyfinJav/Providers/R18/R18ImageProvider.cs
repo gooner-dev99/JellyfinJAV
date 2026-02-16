@@ -73,9 +73,7 @@ namespace JellyfinJav.Providers.R18Provider
         /// <inheritdoc />
         public async Task<HttpResponseMessage> GetImageResponse(string url, CancellationToken cancelToken)
         {
-            var httpResponse = await HttpClient.GetAsync(url, cancelToken).ConfigureAwait(false);
-            await Utility.CropThumb(httpResponse).ConfigureAwait(false);
-            return httpResponse;
+            return await HttpClient.GetAsync(url, cancelToken).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
@@ -93,8 +91,7 @@ namespace JellyfinJav.Providers.R18Provider
             {
                 try
                 {
-                    using (var client = new HttpClient())
-                    using (var response = await client.GetAsync(imageUrl, cancellationToken))
+                    using (var response = await HttpClient.GetAsync(imageUrl, cancellationToken).ConfigureAwait(false))
                     {
                         if (response.IsSuccessStatusCode)
                         {

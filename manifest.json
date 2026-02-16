@@ -4,9 +4,25 @@
         "guid": "1d5fffc2-1028-4553-9660-bd4966899e44",
         "name": "JellyfinJAV",
         "description": "JAV metadata providers for Jellyfin.",
-        "owner": "kyuhaku (current), imaginary-upside (former)",
+        "owner": "gooner-dev99",
         "overview": "JAV metadata providers for Jellyfin.",
         "versions": [
+            {
+                "checksum": "0082ae4f00559ebf43ccbe1a1665b327",
+                "changelog": "",
+                "targetAbi": "10.11.6.0",
+                "sourceUrl": "https://github.com/gooner-dev99/JellyfinJAV/releases/download/2026.02.16.1/jellyfinjav_2026.02.16.1.zip",
+                "timestamp": "2026-02-16T23:15:28Z",
+                "version": "2026.02.16.1"
+            },
+            {
+                "checksum": "08670d679166328042da119bc22c7235",
+                "changelog": "",
+                "targetAbi": "10.11.6.0",
+                "sourceUrl": "https://github.com/gooner-dev99/JellyfinJAV/releases/download/2026.02.16/jellyfinjav_2026.02.16.zip",
+                "timestamp": "2026-02-16T23:13:39Z",
+                "version": "2026.02.16"
+            },
             {
                 "checksum": "a286e17d15611ce24d0a880c7f85589b",
                 "changelog": "",

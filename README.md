@@ -9,7 +9,7 @@ Don't expect perfection.
 # Instructions
 ### Installation
 
-Add the Repo url to Jellyfin using `https://raw.githubusercontent.com/Kyuhaku/JellyfinJAV/master/manifest.json`
+Add the Repo url to Jellyfin using `https://raw.githubusercontent.com/gooner-dev99/JellyfinJAV/master/manifest.json`
 
 
 ### Usage
@@ -27,7 +27,7 @@ When adding the media library, make sure to select "Content type: movies".
 * Docker
 * Docker Compose
 * Python
-* .NET 5.0
+* .NET 9.0
 
 ### Building
     $ ./build.sh
