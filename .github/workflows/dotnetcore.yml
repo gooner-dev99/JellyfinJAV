@@ -109,14 +109,18 @@ jobs:
           cd release
           sha256sum "jellyfinjav_${{ steps.version.outputs.version }}.zip" > "jellyfinjav_${{ steps.version.outputs.version }}.zip.sha256"
 
+      - name: Stage release assets
+        run: |
+          mkdir -p release-assets
+          cp "release/jellyfinjav_${{ steps.version.outputs.version }}.zip" "release-assets/"
+          cp "release/jellyfinjav_${{ steps.version.outputs.version }}.zip.sha256" "release-assets/"
+          cp manifest.json release-assets/
+
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
         with:
           name: jellyfinjav_${{ steps.version.outputs.version }}
-          path: |
-            release/jellyfinjav_${{ steps.version.outputs.version }}.zip
-            release/jellyfinjav_${{ steps.version.outputs.version }}.zip.sha256
-            manifest.json
+          path: release-assets/
 
   release:
     runs-on: ubuntu-latest
@@ -133,6 +137,9 @@ jobs:
         with:
           name: jellyfinjav_${{ needs.package.outputs.version }}
           path: release-assets
+
+      - name: Verify release files
+        run: ls -lah release-assets
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
