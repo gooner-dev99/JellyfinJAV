@@ -1,33 +1,17 @@
-name: Build, Package, Release
+name: Build and Test
 
 on:
   push:
     branches:
       - master
-    tags:
-      - 'v*'
   pull_request:
     branches:
       - master
   workflow_dispatch:
-    inputs:
-      publish_release:
-        description: "Publish a GitHub Release with the packaged zip"
-        required: true
-        default: false
-        type: boolean
-      release_tag:
-        description: "Optional tag name override (example: v2026.02.16.1)"
-        required: false
-        type: string
-
-permissions:
-  contents: write
 
 jobs:
   ci:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/'))
 
     steps:
       - uses: actions/checkout@v4
@@ -50,102 +34,3 @@ jobs:
 
       - name: Test
         run: dotnet test Tests/Tests.csproj --configuration Release --no-restore --verbosity normal
-
-  package:
-    runs-on: ubuntu-latest
-    if: >
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish_release)
-
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      release_tag: ${{ steps.release_tag.outputs.release_tag }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Restore
-        run: dotnet restore JellyfinJav/JellyfinJav.csproj
-
-      - name: Build
-        run: dotnet build JellyfinJav/JellyfinJav.csproj --configuration Release --no-restore
-
-      - id: version
-        name: Read plugin version
-        run: |
-          VERSION=$(python3 - <<'PY'
-          import xml.etree.ElementTree as ET
-          tree = ET.parse('JellyfinJav/JellyfinJav.csproj')
-          print(tree.find('./PropertyGroup/AssemblyVersion').text)
-          PY
-          )
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - id: release_tag
-        name: Resolve release tag
-        run: |
-          if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-          elif [ -n "${{ inputs.release_tag }}" ]; then
-            TAG="${{ inputs.release_tag }}"
-          else
-            TAG="v${{ steps.version.outputs.version }}"
-          fi
-          echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Package plugin
-        run: python3 package.py
-
-      - name: Generate checksum file
-        run: |
-          cd release
-          sha256sum "jellyfinjav_${{ steps.version.outputs.version }}.zip" > "jellyfinjav_${{ steps.version.outputs.version }}.zip.sha256"
-
-      - name: Stage release assets
-        run: |
-          mkdir -p release-assets
-          cp "release/jellyfinjav_${{ steps.version.outputs.version }}.zip" "release-assets/"
-          cp "release/jellyfinjav_${{ steps.version.outputs.version }}.zip.sha256" "release-assets/"
-
-      - name: Upload packaged artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: jellyfinjav_${{ steps.version.outputs.version }}
-          path: release-assets/
-
-  release:
-    runs-on: ubuntu-latest
-    needs: package
-    if: >
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish_release)
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download packaged artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: jellyfinjav_${{ needs.package.outputs.version }}
-          path: release-assets
-
-      - name: Verify release files
-        run: ls -lah release-assets
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.package.outputs.release_tag }}
-          name: ${{ needs.package.outputs.release_tag }}
-          files: |
-            release-assets/jellyfinjav_${{ needs.package.outputs.version }}.zip
-            release-assets/jellyfinjav_${{ needs.package.outputs.version }}.zip.sha256
-          generate_release_notes: true
