@@ -114,7 +114,6 @@ jobs:
           mkdir -p release-assets
           cp "release/jellyfinjav_${{ steps.version.outputs.version }}.zip" "release-assets/"
           cp "release/jellyfinjav_${{ steps.version.outputs.version }}.zip.sha256" "release-assets/"
-          cp manifest.json release-assets/
 
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
@@ -149,5 +148,4 @@ jobs:
           files: |
             release-assets/jellyfinjav_${{ needs.package.outputs.version }}.zip
             release-assets/jellyfinjav_${{ needs.package.outputs.version }}.zip.sha256
-            release-assets/manifest.json
           generate_release_notes: true
