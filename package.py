@@ -101,7 +101,7 @@ entry = {
     "checksum": md5(open(f"release/jellyfinjav_{version}.zip", "rb").read()).hexdigest(),
     "changelog": "",
     "targetAbi": target_abi,
-    "sourceUrl": f"https://github.com/{repo_slug}/releases/download/{version}/jellyfinjav_{version}.zip",
+    "sourceUrl": f"https://github.com/{repo_slug}/releases/download/v{version}/jellyfinjav_{version}.zip",
     "timestamp": timestamp,
     "version": version
 }
