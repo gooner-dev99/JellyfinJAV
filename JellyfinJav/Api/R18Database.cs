@@ -134,8 +134,18 @@ namespace JellyfinJav.Api
         {
             var normalizedKey = NormalizeKey(candidate);
             await using var connection = await dataSource.OpenConnectionAsync().ConfigureAwait(false);
-            await using var videoCommand = connection.CreateCommand();
-            videoCommand.CommandText = @"
+
+            string contentId;
+            string dvdId;
+            string title;
+            DateTime? releaseDate;
+            string? studio;
+            string? cover;
+            string? boxArt;
+
+            await using (var videoCommand = connection.CreateCommand())
+            {
+                videoCommand.CommandText = @"
                 SELECT
                     v.content_id,
                     v.dvd_id,
@@ -151,21 +161,24 @@ namespace JellyfinJav.Api
                 WHERE regexp_replace(lower(v.content_id), '[^a-z0-9]', '', 'g') = @key
                    OR regexp_replace(lower(v.dvd_id), '[^a-z0-9]', '', 'g') = @key
                 LIMIT 1;";
-            videoCommand.Parameters.AddWithValue("key", normalizedKey);
+                videoCommand.Parameters.AddWithValue("key", normalizedKey);
 
-            await using var reader = await videoCommand.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false);
-            if (!await reader.ReadAsync().ConfigureAwait(false))
-            {
-                return null;
+                await using (var reader = await videoCommand.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false))
+                {
+                    if (!await reader.ReadAsync().ConfigureAwait(false))
+                    {
+                        return null;
+                    }
+
+                    contentId = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                    dvdId = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                    title = reader.IsDBNull(2) ? dvdId : reader.GetString(2);
+                    releaseDate = reader.IsDBNull(3) ? null : reader.GetDateTime(3);
+                    studio = reader.IsDBNull(4) ? null : reader.GetString(4);
+                    cover = NormalizeImageUrl(reader.IsDBNull(5) ? null : reader.GetString(5));
+                    boxArt = NormalizeImageUrl(reader.IsDBNull(6) ? null : reader.GetString(6));
+                }
             }
-
-            var contentId = reader.GetString(0);
-            var dvdId = reader.GetString(1);
-            var title = reader.IsDBNull(2) ? dvdId : reader.GetString(2);
-            DateTime? releaseDate = reader.IsDBNull(3) ? null : reader.GetDateTime(3);
-            var studio = reader.IsDBNull(4) ? null : reader.GetString(4);
-            var cover = NormalizeImageUrl(reader.IsDBNull(5) ? null : reader.GetString(5));
-            var boxArt = NormalizeImageUrl(reader.IsDBNull(6) ? null : reader.GetString(6));
 
             if (string.IsNullOrWhiteSpace(boxArt) && !string.IsNullOrWhiteSpace(cover))
             {
