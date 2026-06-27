@@ -40,6 +40,19 @@ When adding the media library, make sure to select "Content type: movies".
 ### General
 JAV files for testing purposes are stored in videos/
 
+### R18 Database Environment Variables
+Set these on the Jellyfin container if you want the plugin to query the PostgreSQL database that contains the imported R18 dump.
+
+* `JELLYFINJAV_R18_DB_CONNECTION_STRING`
+* `JELLYFINJAV_R18_DB_HOST`
+* `JELLYFINJAV_R18_DB_PORT`
+* `JELLYFINJAV_R18_DB_NAME`
+* `JELLYFINJAV_R18_DB_USER`
+* `JELLYFINJAV_R18_DB_PASSWORD`
+* `JELLYFINJAV_R18_DB_SSL_MODE`
+
+If `JELLYFINJAV_R18_DB_CONNECTION_STRING` is not set, the plugin builds a connection string from host, port, database, user, and password. If none of the database environment variables are set, the R18 lookup providers return unavailable results.
+
 # Screenshots
 ![Grid Example](screenshots/example-grid.jpg)
 ![Video Example](screenshots/example-video.jpg)

@@ -9,3 +9,5 @@ release/
 
 cache/
 config/
+
+*.sql.gz
