@@ -54,6 +54,7 @@ target_framework = tree.find("./PropertyGroup/TargetFramework").text
 target_abi_raw = tree.find("./ItemGroup/*[@Include='Jellyfin.Controller']").attrib["Version"]
 target_abi = normalize_abi_version(target_abi_raw)
 anglesharp_version = tree.find("./ItemGroup/*[@Include='AngleSharp']").attrib["Version"]
+npgsql_version = tree.find("./ItemGroup/*[@Include='Npgsql']").attrib["Version"]
 timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 repo_slug = detect_github_repo()
 repo_owner = repo_slug.split("/")[0]
@@ -94,6 +95,10 @@ for file_path in build_output_dir.glob("*"):
 anglesharp_path = Path(f"{Path.home()}/.nuget/packages/anglesharp/{anglesharp_version}/lib/netstandard2.0/AngleSharp.dll")
 if anglesharp_path.exists():
     shutil.copy(anglesharp_path, plugin_dir / "AngleSharp.dll")
+
+npgsql_path = Path(f"{Path.home()}/.nuget/packages/npgsql/{npgsql_version}/lib/net8.0/Npgsql.dll")
+if npgsql_path.exists():
+    shutil.copy(npgsql_path, plugin_dir / "Npgsql.dll")
 
 shutil.make_archive(f"release/jellyfinjav_{version}", "zip", plugin_dir)
 
